@@ -207,6 +207,12 @@ class MethodNotAllowedException(RuntimeException):
     message = "Method not allowed"
 
 
+class NotAuthenticatedException(RuntimeException):
+    httpStatus = 403
+    message = (
+        "Not authenticated. Browse to https://<server>/_login to get a key.")
+
+
 class NotImplementedException(RuntimeException):
     """
     Exception raised when a part of the API has not been implemented.

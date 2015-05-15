@@ -1,4 +1,5 @@
 bin/
 lib/
+man/
 include/
 pip-selfcheck.json

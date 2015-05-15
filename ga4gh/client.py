@@ -55,10 +55,7 @@ class HttpClient(object):
 
     # TODO temporary auth solution
     def _getAuth(self):
-        if self._usingWorkaroundsFor(self.workaroundGoogle):
-            return {'key': self._key}
-        else:
-            return {}
+        return {'key': self._key}
 
     def _usingWorkaroundsFor(self, workaround):
         return workaround in self._workarounds
@@ -128,7 +125,8 @@ class HttpClient(object):
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
         response = requests.request(
-            httpMethod, url, params=params, data=httpData, headers=headers)
+            httpMethod, url, params=params, data=httpData, headers=headers,
+            verify=False)
         self._checkStatus(response)
         return self._deserializeResponse(response, protocolResponseClass)
 

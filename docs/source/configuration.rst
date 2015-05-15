@@ -99,4 +99,47 @@ RESPONSE_VALIDATION
     that they conform to the protocol. This should only be used for development
     purposes.
 
+OIDC_PROVIDER
+    If this value is provided, then OIDC is configured adn SSL us used. It is
+    the URI of the OpenID Connect provider, which should return an OIDC
+    provider configuration document.
 
+SERVER_NAME
+    A standard flask configuration variable, but required if OIDC is configured
+    so the server can know it's correct redirect URI.
+
+OIDC_CLIENT_ID, OIDC_CLIENT_SECRET
+    These are the client id and secret arranged with the OIDC provider,
+    if client registration is manual (google, for instance). If the provider
+    supports automated registration they are not required or used.
+    In the registration process, it is useful to know that the redirect URI
+    will be like ``https://SERVER_NAME/oauth2callback``
+
+------------------------
+OpenID Connect Providers
+------------------------
+
+The server can be configured to use OpenID Connect (OIDC) for authentication.
+As an example, here is how one configures it to use Google as the provider.
+
+Go to https://console.developers.google.com/project and in create a project.
+
+.. image:: images/Create_project.png
+
+Navigate to the project -> APIs & auth -> Consent Screen and enter a product
+name
+
+.. image:: images/Consent_screen_-_ga4gh.png
+
+Navigate to project -> APIs & auth -> Credentials, and create a new client ID.
+
+.. image:: images/Credentials_-_ga4gh.png
+
+Create the client as follows:
+
+.. image:: images/Credentials_-_ga4gh_2.png
+
+Which will give you the necessary client id and secret. Use these in the OIDC
+configuration for the GA4GH server
+
+.. image:: images/Credentials_-_ga4gh_3.png

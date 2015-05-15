@@ -19,9 +19,14 @@ import ga4gh.backend as backend
 import ga4gh.protocol as protocol
 import ga4gh.exceptions as exceptions
 
+import oic
+import oic.oauth2
+import oic.oic.message as message
+
+
 MIMETYPE = "application/json"
 SEARCH_ENDPOINT_METHODS = ['POST', 'OPTIONS']
-
+SECRET_KEY_LENGTH = 24
 
 app = flask.Flask(__name__)
 
@@ -164,6 +169,30 @@ class ServerStatus(object):
         return app.backend.getReferenceSets()
 
 
+@app.before_first_request
+def configure_oid():
+    if "OIDC_PROVIDER" in app.config:
+        app.oidcClient = oic.oic.Client()
+        redirectUri = flask.url_for('oidcCallback',
+                                    _external=True,
+                                    _scheme="https")
+        app.oidcClient.redirect_uris = [redirectUri]
+        app.oidcClient.provider_config(app.config['OIDC_PROVIDER'])
+        if 'registration_endpoint' in app.oidcClient.provider_info:
+            app.oidcClient.register(
+                app.oidcClient.provider_info["registration_endpoint"],
+                redirect_uris=[redirectUri])
+        else:
+            response = message.RegistrationResponse(
+                client_id=app.config['OIDC_CLIENT_ID'],
+                client_secret=app.config['OIDC_CLIENT_SECRET'],
+                redirect_uris=[redirectUri],
+                verify_ssl=False)
+            app.oidcClient.store_registration_info(response)
+            app.tokenMap = {}
+        app.tokenMap = {}
+
+
 def configure(configFile=None, baseConfig="ProductionConfig", extraConfig={}):
     """
     TODO Document this critical function! What does it do? What does
@@ -201,6 +230,9 @@ def configure(configFile=None, baseConfig="ProductionConfig", extraConfig={}):
     theBackend.setDefaultPageSize(app.config["DEFAULT_PAGE_SIZE"])
     theBackend.setMaxResponseLength(app.config["MAX_RESPONSE_LENGTH"])
     app.backend = theBackend
+    app.secret_key = os.urandom(SECRET_KEY_LENGTH)
+    app.oidcClient = None
+    app.tokenMap = None
 
 
 def getFlaskResponse(responseString, httpStatus=200):
@@ -265,6 +297,43 @@ def handleException(exception):
 def assertCorrectVersion(version):
     if not Version.isCurrentVersion(version):
         raise exceptions.VersionNotSupportedException()
+
+
+def startLogin():
+    flask.session["state"] = oic.oauth2.rndstr()
+    flask.session["nonce"] = oic.oauth2.rndstr()
+    args = {
+        "client_id": app.oidcClient.client_id,
+        "response_type": "code",
+        "scope": ["openid", "profile"],
+        "nonce": flask.session["nonce"],
+        "redirect_uri": app.oidcClient.redirect_uris[0],
+        "state": flask.session["state"]
+    }
+
+    result = app.oidcClient.do_authorization_request(
+        request_args=args, state=flask.session["state"])
+    return flask.redirect(result.url)
+
+
+@app.before_request
+def checkAuthentication():
+    """
+    The request should come with an Authorization header of form:
+    Authorization: Bearer <token> if it's from the command line, or
+    have a session key of 'token' if it's the browser.
+    If the token is not found, start the login process.
+
+    If there is no oidcClient, we are running naked and we don't check.
+    If we're being redirected to the oidcCallback we don't check.
+    """
+    if app.oidcClient is not None \
+       and flask.request.endpoint != 'oidcCallback':
+        requestToken = flask.session.get('token')
+        if requestToken is None:
+            requestToken = flask.request.args.get('key')
+        if app.tokenMap.get(requestToken) is None:
+            return startLogin()
 
 
 def handleFlaskGetRequest(version, id_, flaskRequest, endpoint):
@@ -391,6 +460,57 @@ def searchDatasets(version):
         version, flask.request, app.backend.searchDatasets)
 
 
+@app.route('/oauth2callback', methods=['GET'])
+def oidcCallback():
+    """
+    Once the authorization provider has cleared the user, the browser
+    is returned here with a code. This function takes that code and
+    checks it with the authorization provider to prove that it is valid,
+    and get a bit more information about the user (which we don't use).
+
+    A token is generated and given to the user, and the authorization info
+    retrieved above is stored against this token. Later, when a client
+    connects with this token, it is assumed to be a valid user.
+
+    :return: A display of the authentication token to use in the client.
+    """
+    if app.oidcClient is None:
+        return 'Authentication not enabled.', 404
+    response = dict(flask.request.args.iteritems(multi=True))
+    aresp = app.oidcClient.parse_response(message.AuthorizationResponse,
+                                          info=response,
+                                          sformat='dict')
+    sessState = flask.session.get('state')
+    respState = aresp['state']
+    if not isinstance(aresp,
+                      message.AuthorizationResponse) or respState != sessState:
+        raise exceptions.NotAuthenticatedException()
+
+    args = {
+        "code": aresp['code'],
+        "redirect_uri": app.oidcClient.redirect_uris[0],
+        "client_id": app.oidcClient.client_id,
+        "client_secret": app.oidcClient.client_secret
+    }
+    atr = app.oidcClient.do_access_token_request(
+        scope="openid",
+        state=respState,
+        request_args=args)
+
+    if isinstance(atr, message.AccessTokenResponse):
+        atrDict = atr.to_dict()
+        if flask.session.get('nonce') != atrDict['id_token']['nonce']:
+            raise exceptions.NotAuthenticatedException()
+        token = oic.oauth2.rndstr(SECRET_KEY_LENGTH)
+        flask.session['token'] = token
+        app.tokenMap[token] = (aresp["code"], respState, atrDict)
+        response = flask.redirect(flask.url_for('index'))
+        response.headers['Authorization'] = "Bearer {0}".format(token)
+        return response
+    else:
+        raise exceptions.NotAuthenticatedException()
+
+
 # The below methods ensure that JSON is returned for various errors
 # instead of the default, html
 @app.errorhandler(404)
@@ -401,3 +521,8 @@ def pathNotFoundHandler(errorString):
 @app.errorhandler(405)
 def methodNotAllowedHandler(errorString):
     return handleException(exceptions.MethodNotAllowedException())
+
+
+@app.errorhandler(403)
+def notAuthenticatedHandler(errorString):
+    return handleException(exceptions.NotAuthenticatedException())

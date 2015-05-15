@@ -26,6 +26,12 @@ class BaseConfig(object):
     SIMULATED_BACKEND_VARIANT_DENSITY = 0.5
     SIMULATED_BACKEND_NUM_VARIANT_SETS = 1
 
+    # Options for OIDC
+    # OIDC_PROVIDER = "https://accounts.google.com"
+    # OIDC_CLIENT_ID = "XXXX"
+    # OIDC_CLIENT_SECRET = "XXXX"
+    SERVER_NAME = "localhost:8000"
+
 
 class DevelopmentConfig(BaseConfig):
     """
@@ -33,6 +39,13 @@ class DevelopmentConfig(BaseConfig):
     """
     DATA_SOURCE = "ga4gh-example-data"
     DEBUG = True
+
+
+class LocalOidConfig(DevelopmentConfig):
+    """
+    Configuration used for developing against a local OIDC server
+    """
+    OIDC_PROVIDER = "https://localhost:8443"
 
 
 class ProductionConfig(BaseConfig):
@@ -45,6 +58,20 @@ class ProductionConfig(BaseConfig):
     DATA_SOURCE = None
 
 
+class GoogleOIDCConfig(ProductionConfig):
+    """
+    Configuration that is a good basis for production deployments using
+    Google as the authentication provider.
+    """
+    REQUEST_VALIDATION = True
+    # We should complain loudly if data source is not set, rather than
+    # mysteriously serve no data.
+    DATA_SOURCE = None
+    OIDC_PROVIDER = "https://accounts.google.com"
+    OIDC_CLIENT_ID = "XXX"
+    OIDC_CLIENT_SECRET = "XXX"
+
+
 class TestConfig(BaseConfig):
     """
     Configuration used in frontend unit tests.
@@ -52,3 +79,4 @@ class TestConfig(BaseConfig):
     TESTING = True
     REQUEST_VALIDATION = True
     RESPONSE_VALIDATION = True
+    SERVER_NAME = "localhost:8001"

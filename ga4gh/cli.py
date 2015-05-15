@@ -260,6 +260,9 @@ def addGlobalOptions(parser):
         "--config-file", "-f", type=str, default=None,
         help="The configuration file to use")
     parser.add_argument(
+        "--tls", "-t", type=bool, default=False,
+        help="Start in TLS (https) mode.")
+    parser.add_argument(
         "--dont-use-reloader", default=False, action="store_true",
         help="Don't use the flask reloader")
 
@@ -271,9 +274,12 @@ def server_main(parser=None):
     addGlobalOptions(parser)
     args = parser.parse_args()
     frontend.configure(args.config_file, args.config)
+    sslContext = None
+    if args.tls or ("OIDC_PROVIDER" in frontend.app.config):
+        sslContext = "adhoc"
     frontend.app.run(
-        host="0.0.0.0", port=args.port,
-        use_reloader=not args.dont_use_reloader)
+        host="localhost", port=args.port,
+        use_reloader=not args.dont_use_reloader, ssl_context=sslContext)
 
 
 ##############################################################################
@@ -665,7 +671,8 @@ def addClientGlobalOptions(parser):
     parser.add_argument(
         "--workarounds", "-w", default=None, help="The workarounds to use")
     parser.add_argument(
-        "--key", "-k", help="The auth key to use")
+        "--key", "-k",
+        help="Auth Key. Browse to https://<server>/_login to get one.")
     parser.add_argument(
         "--minimalOutput", "-O", default=False,
         help="Use minimal output; default False",
