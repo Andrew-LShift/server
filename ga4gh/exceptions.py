@@ -207,6 +207,12 @@ class MethodNotAllowedException(RuntimeException):
     message = "Method not allowed"
 
 
+class NotAuthenticatedException(RuntimeException):
+    httpStatus = 403
+    message = (
+        "Not authenticated. Use the key on the server index page.")
+
+
 class NotImplementedException(RuntimeException):
     """
     Exception raised when a part of the API has not been implemented.

@@ -24,7 +24,7 @@ class ClientForTesting(object):
         if flags is None:
             self.flags = "-v -O"
         else:
-            self.flags = None
+            self.flags = flags
         self.cmdLine = ("python client_dev.py {flags} {command} "
                         "{serverUrl}/v{protocolVersion}")
         self._createLogFiles()
@@ -50,14 +50,7 @@ class ClientForTesting(object):
             "serverUrl": self.serverUrl,
             "protocolVersion": protocol.version, })
         splits = shlex.split(clientCmdLine)
-        try:
-            subprocess.check_call(
-                splits,
-                stdout=self.outFile,
-                stderr=self.errFile)
-        except subprocess.CalledProcessError as error:
-            self.printDebugInfo(command)
-            raise error
+        subprocess.check_call(splits, stdout=self.outFile, stderr=self.errFile)
 
     def printDebugInfo(self, command):
         outLines = self.getOutLines()

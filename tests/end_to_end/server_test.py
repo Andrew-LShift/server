@@ -5,7 +5,6 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import subprocess
 import unittest
 
 import server as server
@@ -40,7 +39,6 @@ class ServerTest(unittest.TestCase):
             self.server.start()
             super(ServerTest, self).run(*args, **kwargs)
         except Exception as e:
-            self.server.printDebugInfo()
             self.otherExceptionHandling()
             raise e
         finally:
@@ -48,11 +46,7 @@ class ServerTest(unittest.TestCase):
             self.otherTeardown()
 
     def runClientCmd(self, client, command):
-        try:
-            client.runCommand(command)
-        except subprocess.CalledProcessError as error:
-            self.server.printDebugInfo()
-            raise error
+        client.runCommand(command)
 
 
 class RemoteServerTest(ServerTest):
@@ -78,9 +72,4 @@ class RemoteServerTest(ServerTest):
         raise NotImplementedError("Must subclass RemoteServerTest")
 
     def runClientCmd(self, client, command):
-        try:
-            client.runCommand(command)
-        except subprocess.CalledProcessError as error:
-            self.server.printDebugInfo()
-            self.remoteServer.printDebugInfo()
-            raise error
+        client.runCommand(command)
