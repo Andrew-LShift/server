@@ -20,20 +20,24 @@ import tests.utils as utils
 
 ga4ghPort = 8001
 remotePort = 8002
+oidcOpPort = 8443
 
 
 class ServerForTesting(object):
     """
     The base class of a test server
     """
-    def __init__(self, port):
+    def __init__(self, port, protocol='http',
+                 subdirectory=None, ping_status_code=200):
         # suppress requests package log messages
         logging.getLogger("requests").setLevel(logging.CRITICAL)
         self.port = port
+        self.subdirectory = subdirectory
+        self.ping_status_code = ping_status_code
         self.outFile = None
         self.errFile = None
         self.server = None
-        self.serverUrl = "http://localhost:{}".format(self.port)
+        self.serverUrl = "{}://localhost:{}".format(protocol, self.port)
 
     def getUrl(self):
         """
@@ -58,7 +62,8 @@ class ServerForTesting(object):
         splits = shlex.split(self.getCmdLine())
         self.server = subprocess.Popen(
             splits, stdout=self.outFile,
-            stderr=self.errFile)
+            stderr=self.errFile,
+            cwd=self.subdirectory)
         self._waitForServerStartup()
 
     def shutdown(self):
@@ -88,8 +93,8 @@ class ServerForTesting(object):
         """
         try:
             response = self.ping()
-            if response.status_code != 200:
-                msg = ("Ping of server returned non-200 status code "
+            if response.status_code != self.ping_status_code:
+                msg = ("Ping of server returned unexpected status code "
                        "({})").format(response.status_code)
                 assert False, msg
             return True
@@ -100,7 +105,7 @@ class ServerForTesting(object):
         """
         Pings the server by doing a GET request to /
         """
-        response = requests.get(self.serverUrl)
+        response = requests.get(self.serverUrl, verify=False)
         return response
 
     def getOutLines(self):
@@ -156,16 +161,23 @@ class Ga4ghServerForTesting(ServerForTesting):
     """
     A ga4gh test server
     """
-    def __init__(self):
-        super(Ga4ghServerForTesting, self).__init__(ga4ghPort)
+    def __init__(self, use_oidc=False):
+        protocol = 'https' if use_oidc else 'http'
+        super(Ga4ghServerForTesting, self).__init__(ga4ghPort, protocol)
         self.configFile = None
+        self.use_oidc = use_oidc
 
     def getConfig(self):
         config = """
 SIMULATED_BACKEND_NUM_VARIANT_SETS = 10
 SIMULATED_BACKEND_VARIANT_DENSITY = 1
 DATA_SOURCE = "__SIMULATED__"
-DEBUG = True"""
+DEBUG = True
+"""
+        if self.use_oidc:
+            config += """
+OIDC_PROVIDER = "https://localhost:8443"
+"""
         return config
 
     def getCmdLine(self):
@@ -229,3 +241,25 @@ class RemoteServerForTesting(ServerForTesting):
         super(RemoteServerForTesting, self).shutdown()
         if os.path.exists(self.pidFileName):
             os.remove(self.pidFileName)
+
+
+class OidcOpServerForTesting(ServerForTesting):
+    """
+    Runs a test OP server on localhost
+    """
+    def __init__(self):
+        super(OidcOpServerForTesting, self).__init__(
+            oidcOpPort, protocol="https",
+            subdirectory="oidc-provider/simple_op",
+            ping_status_code=404)
+
+    def start(self):
+        # Setup environment for OP server
+        with tempfile.TemporaryFile() as tf:
+            subprocess.check_call(["./setupenv.sh"], cwd="oidc-provider",
+                                  stdout=tf, stderr=subprocess.STDOUT)
+        super(OidcOpServerForTesting, self).start()
+
+    def getCmdLine(self):
+        return ("python src/run.py --base https://localhost:{}" +
+                " -p {} -d settings.yaml").format(oidcOpPort, oidcOpPort)
