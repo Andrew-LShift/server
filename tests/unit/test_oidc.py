@@ -112,6 +112,13 @@ class TestFrontendOidc(unittest.TestCase):
         reload(frontend)
         frontend.configure(
             baseConfig="TestOidcConfig", extraConfig=config, port=8001)
+
+        from beaker.session import SessionObject
+        session = SessionObject({}, **frontend.app.wsgi_app.options)
+        cls.environ = {
+            frontend.app.wsgi_app.environ_key: session
+        }
+
         cls.app = frontend.app.test_client()
 
     @classmethod
@@ -176,7 +183,7 @@ class TestFrontendOidc(unittest.TestCase):
         page
         """
         with self.app as app:
-            with app.session_transaction() as sess:
+            with app.session_transaction(environ_overrides=self.environ) as sess:
                 sess['key'] = 'xxx'
             app.application.tokenMap['xxx'] = RANDSTR
             result = app.get('/')

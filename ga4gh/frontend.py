@@ -7,12 +7,16 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import sys
+
 import os
 import datetime
 import socket
 import urlparse
 
 import flask
+import flask.sessions as sessions
+import beaker.middleware as beaker
 import flask.ext.cors as cors
 import humanize
 import werkzeug
@@ -20,6 +24,7 @@ import oic
 import oic.oauth2
 import oic.oic.message as message
 import requests
+
 
 import ga4gh
 import ga4gh.backend as backend
@@ -198,6 +203,14 @@ class ServerStatus(object):
         return app.backend.getReferenceSets()
 
 
+class BeakerSession(sessions.SessionInterface):
+    def open_session(self, app, request):
+        return request.environ.get('beaker.session')
+
+    def save_session(self, app, session, response):
+        session.save()
+
+
 def configure(configFile=None, baseConfig="ProductionConfig",
               port=8000, extraConfig={}):
     """
@@ -247,6 +260,20 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     app.oidcClient = None
     app.tokenMap = None
     app.myPort = port
+    # Setup beaker sessions
+
+    app.config.setdefault('BEAKER_SESSION_TYPE', 'file')
+    app.config.setdefault('BEAKER_SESSION_URL', None)
+    app.config.setdefault('BEAKER_SESSION_DATA_DIR', './.beaker-session')
+    app.config.setdefault('BEAKER_SESSION_COOKIE_EXPIRES', True)
+    session_options = {
+        'session.type': 'ext:database',
+        'session.url': app.config['BEAKER_SESSION_URL'],
+        'session.data_dir': './cache'
+    }
+    app.wsgi_app = beaker.SessionMiddleware(app.wsgi_app, session_options)
+    app.session_interface = BeakerSession()
+    # Setup OpenID connect
     if "OIDC_PROVIDER" in app.config:
         app.oidcClient = oic.oic.Client()
         app.tokenMap = {}

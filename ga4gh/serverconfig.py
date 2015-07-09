@@ -19,6 +19,7 @@ class BaseConfig(object):
     RESPONSE_VALIDATION = False
     DEFAULT_PAGE_SIZE = 100
     DATA_SOURCE = "__EMPTY__"
+    BEAKER_SESSION_URL = "sqlite:///cache/session.sqlite"
 
     # Options for the simulated backend.
     SIMULATED_BACKEND_RANDOM_SEED = 0
