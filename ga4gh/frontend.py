@@ -15,6 +15,8 @@ import functools
 
 import flask
 import flask.ext.cors as cors
+import flask_session
+import flask_sqlalchemy
 import humanize
 import werkzeug
 import oic
@@ -236,6 +238,13 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     app.oidcClient = None
     app.tokenMap = None
     app.myPort = port
+    # Configure sessions (URI is set in external config)
+    db = flask_sqlalchemy.SQLAlchemy(app)
+    app.config['SESSION_TYPE'] = 'sqlalchemy'
+    app.config['SESSION_USE_SIGNER'] = True
+    app.config['SESSION_SQLALCHEMY'] = db
+    flask_session.Session(app)
+    # Configure OpenID Connect
     if "OIDC_PROVIDER" in app.config:
         # The oic client. If we're testing, we don't want to verify
         # SSL certificates
