@@ -74,6 +74,7 @@ class TestConfig(BaseConfig):
     TESTING = True
     REQUEST_VALIDATION = True
     RESPONSE_VALIDATION = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///testing.sqlite'
 
 
 class TestOidcConfig(TestConfig):

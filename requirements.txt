@@ -19,3 +19,6 @@ oic
 pyopenssl
 lxml
 cherrypy
+sqlalchemy
+flask-sqlalchemy
+flask-session

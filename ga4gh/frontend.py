@@ -12,11 +12,14 @@ import datetime
 import socket
 import urlparse
 import functools
+import pickle
 
 import flask
 import flask.ext.cors as cors
 import flask_session
 import flask_sqlalchemy
+import sqlalchemy
+import sqlalchemy.ext.declarative
 import humanize
 import werkzeug
 import oic
@@ -189,6 +192,17 @@ class ServerStatus(object):
         return app.backend.getReferenceSets()
 
 
+Base = sqlalchemy.ext.declarative.declarative_base()
+
+class Token(Base):
+    __tablename__ = 'tokens'
+    key = sqlalchemy.Column(
+        sqlalchemy.String(120), primary_key=True)
+
+    def __init__(self, key):
+        self.key = key
+
+
 def configure(configFile=None, baseConfig="ProductionConfig",
               port=8000, extraConfig={}):
     """
@@ -236,21 +250,23 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     app.backend = theBackend
     app.secret_key = os.urandom(SECRET_KEY_LENGTH)
     app.oidcClient = None
-    app.tokenMap = None
     app.myPort = port
-    # Configure sessions (URI is set in external config)
-    db = flask_sqlalchemy.SQLAlchemy(app)
+    # Configure database (database URI is set in external config)
+    app.db = flask_sqlalchemy.SQLAlchemy(app)
+    Base.query = app.db.session.query_property()
+    Base.metadata.create_all(app.db.engine)
+    # Configure sessions
     app.config['SESSION_TYPE'] = 'sqlalchemy'
     app.config['SESSION_USE_SIGNER'] = True
-    app.config['SESSION_SQLALCHEMY'] = db
+    app.config['SESSION_SQLALCHEMY'] = app.db
     flask_session.Session(app)
+
     # Configure OpenID Connect
     if "OIDC_PROVIDER" in app.config:
         # The oic client. If we're testing, we don't want to verify
         # SSL certificates
         app.oidcClient = oic.oic.Client(
             verify_ssl=('TESTING' not in app.config))
-        app.tokenMap = {}
         try:
             app.oidcClient.provider_config(app.config['OIDC_PROVIDER'])
         except requests.exceptions.ConnectionError:
@@ -396,7 +412,8 @@ def checkAuthentication():
     if flask.request.endpoint == 'oidcCallback':
         return
     key = flask.session.get('key') or flask.request.args.get('key')
-    if app.tokenMap.get(key) is None:
+    token = Token.query.filter(Token.key == key).first()
+    if token is None:
         if 'key' in flask.request.args:
             raise exceptions.NotAuthenticatedException()
         else:
@@ -735,7 +752,10 @@ def oidcCallback():
         raise exceptions.NotAuthenticatedException()
     key = oic.oauth2.rndstr(SECRET_KEY_LENGTH)
     flask.session['key'] = key
-    app.tokenMap[key] = aresp["code"], respState, atrDict
+    keyTuple = aresp["code"], respState, atrDict
+    token = Token(pickle.dumps(keyTuple))
+    app.db.session.add(token)
+    app.db.session.commit()
     # flask.url_for is broken. It relies on SERVER_NAME for both name
     # and port, and defaults to 'localhost' if not found. Therefore
     # we need to fix the returned url
