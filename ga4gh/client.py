@@ -41,9 +41,6 @@ class HttpClient(object):
 
         requestsLog = logging.getLogger("requests.packages.urllib3")
         requestsLog.setLevel(logLevel)
-        if self._debugLevel == 0:
-            # suppress warning about using https without cert verification
-            requests.packages.urllib3.disable_warnings()
         requestsLog.propagate = True
 
     def getBytesRead(self):
@@ -117,15 +114,14 @@ class HttpClient(object):
         Performs a request to the server and returns the response
         """
         headers = {}
-        params = self._getAuth()
-        params.update(httpParams)
+        cookies = self._getAuth()
         self._logger.info("{0} {1}".format(httpMethod, url))
         if httpData is not None:
             headers.update({"Content-type": "application/json"})
             self._debugRequest(httpData)
         response = requests.request(
-            httpMethod, url, params=params, data=httpData, headers=headers,
-            verify=False)
+            httpMethod, url, params=httpParams, cookies=cookies,
+            data=httpData, headers=headers, verify=False)
         self._checkStatus(response)
         return self._deserializeResponse(response, protocolResponseClass)
 

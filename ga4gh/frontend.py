@@ -236,7 +236,6 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     app.backend = theBackend
     app.secret_key = os.urandom(SECRET_KEY_LENGTH)
     app.oidcClient = None
-    app.tokenMap = None
     app.myPort = port
     # Configure sessions (URI is set in external config)
     db = flask_sqlalchemy.SQLAlchemy(app)
@@ -250,7 +249,6 @@ def configure(configFile=None, baseConfig="ProductionConfig",
         # SSL certificates
         app.oidcClient = oic.oic.Client(
             verify_ssl=('TESTING' not in app.config))
-        app.tokenMap = {}
         try:
             app.oidcClient.provider_config(app.config['OIDC_PROVIDER'])
         except requests.exceptions.ConnectionError:
@@ -395,9 +393,9 @@ def checkAuthentication():
         return
     if flask.request.endpoint == 'oidcCallback':
         return
-    key = flask.session.get('key') or flask.request.args.get('key')
-    if app.tokenMap.get(key) is None:
-        if 'key' in flask.request.args:
+    authenticated = flask.session.get('authenticated')
+    if authenticated is None:
+        if 'session' in flask.request.cookies:
             raise exceptions.NotAuthenticatedException()
         else:
             return startLogin()
@@ -733,9 +731,7 @@ def oidcCallback():
     atrDict = atr.to_dict()
     if flask.session.get('nonce') != atrDict['id_token']['nonce']:
         raise exceptions.NotAuthenticatedException()
-    key = oic.oauth2.rndstr(SECRET_KEY_LENGTH)
-    flask.session['key'] = key
-    app.tokenMap[key] = aresp["code"], respState, atrDict
+    flask.session['authenticated'] = aresp["code"], respState, atrDict
     # flask.url_for is broken. It relies on SERVER_NAME for both name
     # and port, and defaults to 'localhost' if not found. Therefore
     # we need to fix the returned url
