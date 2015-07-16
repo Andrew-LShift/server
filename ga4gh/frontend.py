@@ -375,9 +375,8 @@ def startLogin():
 @app.before_request
 def checkAuthentication():
     """
-    The request will have a parameter 'key' if it came from the command line
-    client, or have a session key of 'key' if it's the browser.
-    If the token is not found, start the login process.
+    The request will have a session key in its cookie.
+    If the key is not found, start the login process.
 
     If there is no oidcClient, we are running naked and we don't check.
     If we're being redirected to the oidcCallback we don't check.
@@ -694,11 +693,12 @@ def oidcCallback():
     checks it with the authorization provider to prove that it is valid,
     and get a bit more information about the user (which we don't use).
 
-    A token is generated and given to the user, and the authorization info
-    retrieved above is stored against this token. Later, when a client
-    connects with this token, it is assumed to be a valid user.
+    The authentication is logged in the server-side session, and the session
+    key (which travels in the cookie) is displayed to the user. Later, when a
+    client connects with this key, it gains control of the session and is
+    deemed to be a valid user.
 
-    :return: A display of the authentication token to use in the client. If
+    :return: A display of the authentication token for use in the client. If
     OIDC is not configured, raises a NotImplementedException.
     """
     if app.oidcClient is None:
