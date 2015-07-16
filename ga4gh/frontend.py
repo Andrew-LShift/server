@@ -240,7 +240,6 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     # Configure sessions (URI is set in external config)
     db = flask_sqlalchemy.SQLAlchemy(app)
     app.config['SESSION_TYPE'] = 'sqlalchemy'
-    app.config['SESSION_USE_SIGNER'] = True
     app.config['SESSION_SQLALCHEMY'] = db
     flask_session.Session(app)
     # Configure OpenID Connect

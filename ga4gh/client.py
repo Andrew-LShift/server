@@ -41,6 +41,9 @@ class HttpClient(object):
 
         requestsLog = logging.getLogger("requests.packages.urllib3")
         requestsLog.setLevel(logLevel)
+        if self._debugLevel == 0:
+            # suppress warning about using https without cert verification
+            requests.packages.urllib3.disable_warnings()
         requestsLog.propagate = True
 
     def getBytesRead(self):
@@ -51,7 +54,7 @@ class HttpClient(object):
         return self._bytesRead
 
     def _getAuth(self):
-        return {'key': self._key}
+        return {'session': self._key}
 
     def _usingWorkaroundsFor(self, workaround):
         return workaround in self._workarounds

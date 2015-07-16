@@ -112,11 +112,6 @@ class TestFrontendOidc(unittest.TestCase):
         reload(frontend)
         frontend.configure(
             baseConfig="TestOidcConfig", extraConfig=config, port=8001)
-        cls.app = frontend.app.test_client()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.app = None
 
     def sendPostRequest(self, path, request):
         """
@@ -127,9 +122,11 @@ class TestFrontendOidc(unittest.TestCase):
             'Content-type': 'application/json',
             'Origin': self.exampleUrl,
         }
-        return self.app.post(
-            versionedPath, headers=headers,
-            data=request.toJsonString())
+        with frontend.app.test_client() as app:
+            result = app.post(
+                versionedPath, headers=headers,
+                data=request.toJsonString())
+        return result
 
     @mock.patch('oic.oauth2.rndstr', mockRndstr)
     @mock.patch('oic.oic.Client.do_authorization_request',
@@ -139,15 +136,16 @@ class TestFrontendOidc(unittest.TestCase):
         Test that when the index is referenced, we get a redirect to the
         authorization provider, of the correct form.
         """
-        response = self.app.get('/')
-        scheme, netloc, path, params, query, fragment = urlparse.urlparse(
-            response.location)
-        self.assertEqual(netloc, 'auth.com')
-        args = urlparse.parse_qs(query, strict_parsing=True)
-        self.assertEqual(path, '/auth')
-        self.assertEqual(args['redirect_uri'][0],
-                         'https://{}:8001/oauth2callback'.format(
-                             socket.gethostname()))
+        with frontend.app.test_client() as app:
+            response = app.get('/')
+            scheme, netloc, path, params, query, fragment = urlparse.urlparse(
+                response.location)
+            self.assertEqual(netloc, 'auth.com')
+            args = urlparse.parse_qs(query, strict_parsing=True)
+            self.assertEqual(path, '/auth')
+            self.assertEqual(args['redirect_uri'][0],
+                             'https://{}:8001/oauth2callback'.format(
+                                 socket.gethostname()))
 
     @mock.patch('oic.oauth2.rndstr', lambda x: RANDSTR)
     @mock.patch('oic.oic.Client.parse_response',
@@ -162,10 +160,11 @@ class TestFrontendOidc(unittest.TestCase):
         url = '/oauth2callback?scope=openid+profile&state={0}&code={1}'.format(
             oic.oauth2.rndstr(0), OICCODE
         )
-        with self.app.session_transaction() as sess:
-            sess['state'] = oic.oauth2.rndstr(0)
-            sess['nonce'] = oic.oauth2.rndstr(0)
-        result = self.app.get(url)
+        with frontend.app.test_client() as app:
+            with app.session_transaction() as sess:
+                sess['state'] = oic.oauth2.rndstr(0)
+                sess['nonce'] = oic.oauth2.rndstr(0)
+            result = app.get(url)
         self.assertEqual(result.status_code, 302)
         self.assertEqual(result.location, 'http://{0}:8001/'.format(
             socket.gethostname()))
@@ -175,23 +174,10 @@ class TestFrontendOidc(unittest.TestCase):
         Test that if we have a valid session in play, we retrieve the index
         page
         """
-        with self.app as app:
+        with frontend.app.test_client() as app:
             with app.session_transaction() as sess:
-                sess['key'] = 'xxx'
-            app.application.tokenMap['xxx'] = RANDSTR
+                sess['authenticated'] = True
             result = app.get('/')
-            self.assertEqual(result.status_code, 200)
-            self.assertEqual("text/html", result.mimetype)
-            self.assertGreater(len(result.data), 0)
-
-    def testKeyParamAllowsIndex(self):
-        """
-        Test that if we have a valid key in play, we retrieve the index
-        page
-        """
-        with self.app as app:
-            app.application.tokenMap['xxx'] = RANDSTR
-            result = app.get('/?key=xxx')
             self.assertEqual(result.status_code, 200)
             self.assertEqual("text/html", result.mimetype)
             self.assertGreater(len(result.data), 0)
@@ -203,9 +189,7 @@ class TestFrontendOidc(unittest.TestCase):
         """
         Test that if we have an invalid session in play, we redirected to OP
         """
-        with self.app as app:
-            with app.session_transaction() as sess:
-                sess['key'] = 'xxx'
+        with frontend.app.test_client() as app:
             result = app.get('/')
             scheme, netloc, path, params, query, fragment = urlparse.urlparse(
                 result.location)
@@ -223,7 +207,13 @@ class TestFrontendOidc(unittest.TestCase):
         """
         Test that if we have an invalid key in play, we get an exception
         """
-        result = self.app.get('/?key=xxx')
+        with frontend.app.test_client() as app:
+            with app.session_transaction() as sess:
+                sess['authenticated'] = True
+            for c in app.cookie_jar:
+                if c.name == 'session':
+                    c.value = 'invalid'
+            result = app.get('/')
         self.assertEqual(result.status_code, 403)
 
     @mock.patch('oic.oauth2.rndstr', lambda x: RANDSTR)
@@ -240,7 +230,7 @@ class TestFrontendOidc(unittest.TestCase):
         url = '/oauth2callback?scope=openid+profile&state={0}&code={1}'.format(
             oic.oauth2.rndstr(0), OICCODE
         )
-        with self.app as app:
+        with frontend.app.test_client() as app:
             with app.session_transaction() as sess:
                 sess['state'] = oic.oauth2.rndstr(0)
                 sess['nonce'] = 'other'
@@ -261,7 +251,7 @@ class TestFrontendOidc(unittest.TestCase):
         url = '/oauth2callback?scope=openid+profile&state={0}&code={1}'.format(
             oic.oauth2.rndstr(0), OICCODE
         )
-        with self.app as app:
+        with frontend.app.test_client() as app:
             with app.session_transaction() as sess:
                 sess['state'] = 'other'
                 sess['nonce'] = oic.oauth2.rndstr(0)
@@ -282,7 +272,7 @@ class TestFrontendOidc(unittest.TestCase):
         url = '/oauth2callback?scope=openid+profile&state={0}&code={1}'.format(
             oic.oauth2.rndstr(0), OICCODE
         )
-        with self.app as app:
+        with frontend.app.test_client() as app:
             with app.session_transaction() as sess:
                 sess['state'] = oic.oauth2.rndstr(0)
                 sess['nonce'] = oic.oauth2.rndstr(0)
