@@ -110,6 +110,7 @@ class TestFrontendOidc(unittest.TestCase):
             # "DEBUG" : True
         }
         reload(frontend)
+        utils.deleteTestDatabase()
         frontend.configure(
             baseConfig="TestOidcConfig", extraConfig=config, port=8001)
         cls.app = frontend.app.test_client()
@@ -117,6 +118,7 @@ class TestFrontendOidc(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.app = None
+        utils.deleteTestDatabase()
 
     def sendPostRequest(self, path, request):
         """
@@ -178,11 +180,11 @@ class TestFrontendOidc(unittest.TestCase):
         with self.app as app:
             with app.session_transaction() as sess:
                 sess['key'] = 'xxx'
-            app.application.tokenMap['xxx'] = RANDSTR
-            result = app.get('/')
-            self.assertEqual(result.status_code, 200)
-            self.assertEqual("text/html", result.mimetype)
-            self.assertGreater(len(result.data), 0)
+            with utils.temporary_token('xxx'):
+                result = app.get('/')
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual("text/html", result.mimetype)
+                self.assertGreater(len(result.data), 0)
 
     def testKeyParamAllowsIndex(self):
         """
@@ -190,11 +192,11 @@ class TestFrontendOidc(unittest.TestCase):
         page
         """
         with self.app as app:
-            app.application.tokenMap['xxx'] = RANDSTR
-            result = app.get('/?key=xxx')
-            self.assertEqual(result.status_code, 200)
-            self.assertEqual("text/html", result.mimetype)
-            self.assertGreater(len(result.data), 0)
+            with utils.temporary_token('xxx'):
+                result = app.get('/?key=xxx')
+                self.assertEqual(result.status_code, 200)
+                self.assertEqual("text/html", result.mimetype)
+                self.assertGreater(len(result.data), 0)
 
     @mock.patch('oic.oauth2.rndstr', mockRndstr)
     @mock.patch('oic.oic.Client.do_authorization_request',

@@ -11,9 +11,11 @@ import itertools
 import os
 import signal
 import time
+import contextlib
 
 import ga4gh.protocol as protocol
 import ga4gh.client as client
+import ga4gh.frontend as frontend
 
 
 packageName = 'ga4gh'
@@ -53,6 +55,23 @@ def getProjectRootFilePath():
 
 def getGa4ghFilePath():
     return os.path.join(getProjectRootFilePath(), packageName)
+
+
+@contextlib.contextmanager
+def temporary_token(key):
+    db = frontend.app.db
+    token = frontend.Token(key)
+    db.session.add(token)
+    db.session.commit()
+    yield
+    db.session.delete(token)
+    db.session.commit()
+
+
+def deleteTestDatabase():
+    db_path = 'ga4gh/testing.sqlite'
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
 
 def makeHttpClient():

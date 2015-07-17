@@ -12,7 +12,6 @@ import datetime
 import socket
 import urlparse
 import functools
-import pickle
 
 import flask
 import flask.ext.cors as cors
@@ -257,7 +256,6 @@ def configure(configFile=None, baseConfig="ProductionConfig",
     Base.metadata.create_all(app.db.engine)
     # Configure sessions
     app.config['SESSION_TYPE'] = 'sqlalchemy'
-    app.config['SESSION_USE_SIGNER'] = True
     app.config['SESSION_SQLALCHEMY'] = app.db
     flask_session.Session(app)
 
@@ -752,9 +750,7 @@ def oidcCallback():
         raise exceptions.NotAuthenticatedException()
     key = oic.oauth2.rndstr(SECRET_KEY_LENGTH)
     flask.session['key'] = key
-    keyTuple = aresp["code"], respState, atrDict
-    token = Token(pickle.dumps(keyTuple))
-    app.db.session.add(token)
+    app.db.session.add(Token(key))
     app.db.session.commit()
     # flask.url_for is broken. It relies on SERVER_NAME for both name
     # and port, and defaults to 'localhost' if not found. Therefore

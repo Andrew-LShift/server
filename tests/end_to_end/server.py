@@ -199,10 +199,15 @@ python server_dev.py
 --port {} """.format(configFilePath, self.port)
         return cmdLine
 
+    def start(self):
+        utils.deleteTestDatabase()
+        super(Ga4ghServerForTesting, self).start()
+
     def shutdown(self):
         super(Ga4ghServerForTesting, self).shutdown()
         if self.configFile is not None:
             self.configFile.close()
+        utils.deleteTestDatabase()
 
     def printDebugInfo(self):
         super(Ga4ghServerForTesting, self).printDebugInfo()
